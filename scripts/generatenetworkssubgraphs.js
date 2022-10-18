@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 const fs = require('fs')
-let addresses = require('@oceanprotocol/contracts/addresses/address.json')
+// let addresses = require('@oceanprotocol/contracts/addresses/address.json')
+let addresses = require('../address.json')
 
 async function replaceContractAddresses() {
   // load addresses file first
@@ -29,7 +30,6 @@ async function replaceContractAddresses() {
         subgraph += '  ' + lines[line] + '\n'
       }
     }
-
     subgraph = subgraph.replace(/__NETWORK__/g, network)
     subgraph = subgraph.replace(
       /__STARTBLOCK__/g,
