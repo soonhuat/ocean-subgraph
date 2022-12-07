@@ -138,8 +138,8 @@ describe('Fixed Rate Exchange tests', async () => {
                 symbol,
                 name,
                 tokenUri,
-                owner,
-                creator,
+                owner{id},
+                creator{id},
                 address,
                 providerUrl,
                 assetState,
@@ -166,8 +166,8 @@ describe('Fixed Rate Exchange tests', async () => {
     assert(nft.symbol === nftSymbol, 'incorrect value for: symbol')
     assert(nft.name === nftName, 'incorrect value for: name')
     assert(nft.tokenUri === tokenURI, 'incorrect value for: tokenUri')
-    assert(nft.owner === publisher, 'incorrect value for: owner')
-    assert(nft.creator === publisher, 'incorrect value for: creator')
+    assert(nft.owner.id === publisher, 'incorrect value for: owner')
+    assert(nft.creator.id === publisher, 'incorrect value for: creator')
     assert(nft.managerRole[0] === publisher, 'incorrect value for: managerRole')
     assert(
       nft.erc20DeployerRole[0] === factoryAddress,
@@ -273,10 +273,6 @@ describe('Fixed Rate Exchange tests', async () => {
     assert(dtTx.blockNumber >= blockNumber, 'incorrect value for: tx')
     assert(dt.block >= blockNumber, 'incorrect value for: block')
     assert(dt.block < blockNumber + 50, 'incorrect value for: block')
-    assert(
-      dt.lastPriceToken === '0x0000000000000000000000000000000000000000',
-      'incorrect value for: lastPriceToken'
-    )
     assert(dt.lastPriceValue === '0', 'incorrect value for: lastPriceValue')
   })
 

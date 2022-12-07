@@ -1,4 +1,4 @@
-import { Nft, NftUpdate } from '../@types/schema'
+import { Nft, NftUpdate, NftData, NftTransferHistory } from '../@types/schema'
 import {
   MetadataCreated,
   MetadataState,
@@ -13,7 +13,8 @@ import {
   RemovedFromMetadataList,
   RemovedManager,
   CleanedPermissions,
-  Transfer
+  Transfer,
+  DataChanged
 } from '../@types/templates/ERC721Template/ERC721Template'
 import { NftUpdateType } from './utils/constants'
 import { getNftToken, getNftTokenWithID } from './utils/tokenUtils'
@@ -118,7 +119,7 @@ export function handleTokenUriUpdate(event: TokenURIUpdate): void {
   nftUpdate.timestamp = event.block.timestamp.toI32()
   nftUpdate.tx = event.transaction.hash.toHex()
   nftUpdate.block = event.block.number.toI32()
-
+  nftUpdate.assetState = nft.assetState
   nftUpdate.save()
   nft.save()
 }
@@ -255,8 +256,33 @@ export function handleCleanedPermissions(event: CleanedPermissions): void {
 export function handleNftTransferred(event: Transfer): void {
   const id = event.address.toHex()
   const nft = getNftTokenWithID(id)
+  const oldOwner = nft.owner
   const newOwner = getUser(event.params.to.toHexString())
   nft.owner = newOwner.id
-
   nft.save()
+
+  const transferId = `${nft.address}-${event.transaction.hash.toHex()}-${
+    event.logIndex
+  }`
+  const newTransfer = new NftTransferHistory(transferId)
+  newTransfer.oldOwner = oldOwner
+  newTransfer.nft = nft.id
+  newTransfer.newOwner = newOwner.id
+  newTransfer.txId = event.transaction.hash.toHex()
+  newTransfer.timestamp = event.block.timestamp.toI32()
+  newTransfer.block = event.block.number.toI32()
+  newTransfer.save()
+}
+
+export function handleNftData(event: DataChanged): void {
+  const id = event.address.toHexString() + '-' + event.params.key.toHexString()
+  const nft = getNftToken(event.address)
+  let data = NftData.load(id)
+  if (data == null) {
+    data = new NftData(id)
+  }
+  data.key = event.params.key
+  data.value = event.params.value
+  data.nft = nft.id
+  data.save()
 }

@@ -1,5 +1,6 @@
 import { Order, Nft, OrderReuse } from '../@types/schema'
-import { BigInt } from '@graphprotocol/graph-ts'
+import { BigInt, BigDecimal, Address } from '@graphprotocol/graph-ts'
+
 import {
   NewPaymentCollector,
   OrderStarted,
@@ -37,6 +38,12 @@ export function handleOrderStarted(event: OrderStarted): void {
   const consumer = getUser(event.params.consumer.toHex())
   order.consumer = consumer.id
 
+  if (token.nft) {
+    const nft = Nft.load(token.nft as string) as Nft
+    const nftOwner = getUser(nft.owner)
+    order.nftOwner = nftOwner.id
+  }
+
   const payer = getUser(event.params.payer.toHex())
   payer.totalOrders = payer.totalOrders.plus(integer.ONE)
   payer.save()
@@ -58,13 +65,28 @@ export function handleOrderStarted(event: OrderStarted): void {
   order.createdTimestamp = event.block.timestamp.toI32()
   order.tx = event.transaction.hash.toHex()
   order.block = event.block.number.toI32()
-  order.lastPriceToken = token.lastPriceToken
-  order.lastPriceValue = token.lastPriceValue
-  order.estimatedUSDValue = getUSDValue(
-    order.lastPriceToken,
-    order.lastPriceValue,
-    order.createdTimestamp
-  )
+  const tokenId = token.lastPriceToken
+  if (tokenId) {
+    const priceToken = getToken(Address.fromString(tokenId), false)
+    order.lastPriceToken = priceToken.id
+    order.lastPriceValue = token.lastPriceValue
+    order.estimatedUSDValue = getUSDValue(
+      priceToken.id,
+      order.lastPriceValue,
+      order.createdTimestamp
+    )
+  }
+
+  if (event.receipt !== null && event.receipt!.gasUsed) {
+    order.gasUsed = event.receipt!.gasUsed.toBigDecimal()
+  } else {
+    order.gasUsed = BigDecimal.zero()
+  }
+  if (event.transaction.gasPrice) {
+    order.gasPrice = event.transaction.gasPrice
+  } else {
+    order.gasPrice = BigInt.zero()
+  }
   order.save()
   token.save()
   addOrder()
@@ -91,6 +113,12 @@ export function handlerOrderReused(event: OrderReused): void {
   if (!order) return
 
   const reuseOrder = new OrderReuse(event.transaction.hash.toHex())
+  if (event.transaction.gasPrice)
+    reuseOrder.gasPrice = event.transaction.gasPrice
+  else reuseOrder.gasPrice = BigInt.zero()
+  if (event.receipt !== null && event.receipt!.gasUsed) {
+    reuseOrder.gasUsed = event.receipt!.gasUsed.toBigDecimal()
+  } else reuseOrder.gasUsed = BigDecimal.zero()
   reuseOrder.order = orderId
   reuseOrder.caller = event.params.caller.toHexString()
   reuseOrder.createdTimestamp = event.params.timestamp.toI32()
@@ -235,6 +263,12 @@ export function handleProviderFee(event: ProviderFee): void {
     orderReuse.tx = event.transaction.hash.toHex()
     orderReuse.block = event.block.number.toI32()
     orderReuse.caller = event.transaction.from.toHex()
+    if (event.transaction.gasPrice)
+      orderReuse.gasPrice = event.transaction.gasPrice
+    else orderReuse.gasPrice = BigInt.zero()
+    if (event.receipt !== null && event.receipt!.gasUsed) {
+      orderReuse.gasUsed = event.receipt!.gasUsed.toBigDecimal()
+    } else orderReuse.gasUsed = BigDecimal.zero()
     orderReuse.save()
   }
 }

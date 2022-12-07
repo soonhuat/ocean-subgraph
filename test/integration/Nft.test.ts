@@ -130,8 +130,8 @@ describe('NFT tests', async () => {
                 symbol,
                 name,
                 tokenUri,
-                owner,
-                creator,
+                owner{id},
+                creator{id},
                 address,
                 providerUrl,
                 assetState,
@@ -157,8 +157,8 @@ describe('NFT tests', async () => {
     assert(nft.symbol === nftSymbol, 'incorrect value for: symbol')
     assert(nft.name === nftName, 'incorrect value for: name')
     assert(nft.tokenUri === tokenURI, 'incorrect value for: tokenUri')
-    assert(nft.owner === publisher, 'incorrect value for: owner')
-    assert(nft.creator === publisher, 'incorrect value for: creator')
+    assert(nft.owner.id === publisher, 'incorrect value for: owner')
+    assert(nft.creator.id === publisher, 'incorrect value for: creator')
     assert(nft.managerRole[0] === publisher, 'incorrect value for: managerRole')
     assert(
       nft.erc20DeployerRole[0] === factoryAddress,
@@ -219,8 +219,8 @@ describe('NFT tests', async () => {
                 symbol,
                 name,
                 tokenUri,
-                owner,
-                creator,
+                owner{id},
+                creator{id},
                 address,
                 providerUrl,
                 assetState,
@@ -247,8 +247,8 @@ describe('NFT tests', async () => {
     assert(updatedNft.symbol === nftSymbol, 'incorrect value for: symbol')
     assert(updatedNft.name === nftName, 'incorrect value for: name')
     assert(updatedNft.tokenUri === tokenURI, 'incorrect value for: tokenUri')
-    assert(updatedNft.owner === publisher, 'incorrect value for: owner')
-    assert(updatedNft.creator === publisher, 'incorrect value for: creator')
+    assert(updatedNft.owner.id === publisher, 'incorrect value for: owner')
+    assert(updatedNft.creator.id === publisher, 'incorrect value for: creator')
     assert(
       updatedNft.managerRole[0] === publisher,
       'incorrect value for: managerRole'
@@ -284,5 +284,27 @@ describe('NFT tests', async () => {
     assert(updatedNft.block >= blockNumber, 'incorrect value for: block')
     assert(updatedNft.block < blockNumber + 50, 'incorrect value for: block')
     assert(updatedNft.orderCount === '0', 'incorrect value for: orderCount')
+  })
+
+  it('Set a key/value in erc725 store', async () => {
+    await nft.setData(nftAddress, publisher, 'test_key', 'test_value')
+    await sleep(2000)
+    const query = {
+      query: `query {
+                nft(id:"${nftAddress}"){
+                  nftData{
+                    id
+                    key
+                    value
+                  }
+                }
+              }`
+    }
+    const response = await fetch(subgraphUrl, {
+      method: 'POST',
+      body: JSON.stringify(query)
+    })
+    const updatedNft = (await response.json()).data.nft
+    assert(updatedNft.nftData.key !== null, 'incorrect value for key')
   })
 })

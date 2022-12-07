@@ -7,7 +7,7 @@
     startBlock: __STARTBLOCK__
   mapping:
     kind: ethereum/events
-    apiVersion: 0.0.6
+    apiVersion: 0.0.7
     language: wasm/assemblyscript
     file: ./src/mappings/veAllocate.ts
     entities:
@@ -30,7 +30,7 @@
     startBlock: __STARTBLOCK__
   mapping:
     kind: ethereum/events
-    apiVersion: 0.0.6
+    apiVersion: 0.0.7
     language: wasm/assemblyscript
     file: ./src/mappings/veOCEAN.ts
     entities:
@@ -42,9 +42,9 @@
       - event: Deposit(indexed address,uint256,indexed uint256,int128,uint256)
         handler: handleDeposit
       - event: Withdraw(indexed address,uint256,uint256)
-        handler: handleSupply
-      - event: Supply(uint256,uint256)
         handler: handleWithdraw
+      - event: Supply(uint256,uint256)
+        handler: handleSupply
 
 - name: veDelegation
   kind: ethereum/contract
@@ -55,7 +55,7 @@
     startBlock: __STARTBLOCK__
   mapping:
     kind: ethereum/events
-    apiVersion: 0.0.6
+    apiVersion: 0.0.7
     language: wasm/assemblyscript
     file: ./src/mappings/veDelegation.ts
     entities:
@@ -67,6 +67,29 @@
       - event: DelegateBoost(indexed address,indexed address,indexed uint256,uint256,uint256,uint256)
         handler: handleDelegation
 
+- name: veFeeDistributor
+  kind: ethereum/contract
+  network: __NETWORK__
+  source:
+    abi: veFeeDistributor
+    address: __VEFEEDISTRIBUTORNADDRESS__
+    startBlock: __STARTBLOCK__
+  mapping:
+    kind: ethereum/events
+    apiVersion: 0.0.7
+    language: wasm/assemblyscript
+    file: ./src/mappings/veFeeDistributor.ts
+    entities:
+      - veFeeDistributor
+    abis:
+      - name: veFeeDistributor
+        file: ./node_modules/@oceanprotocol/contracts/artifacts/contracts/ve/veFeeDistributor.vy/veFeeDistributor.json
+    eventHandlers:
+      - event: Claimed(indexed address,uint256,uint256,uint256)
+        handler: handleClaimed
+      - event: CheckpointToken(uint256,uint256)
+        handler: handleCheckpoint
+
 - name: DFRewards
   kind: ethereum/contract
   network: __NETWORK__
@@ -76,7 +99,7 @@
     startBlock: __STARTBLOCK__
   mapping:
     kind: ethereum/events
-    apiVersion: 0.0.6
+    apiVersion: 0.0.7
     language: wasm/assemblyscript
     file: ./src/mappings/dfRewards.ts
     entities:

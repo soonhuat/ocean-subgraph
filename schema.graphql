@@ -56,7 +56,7 @@ type Token @entity {
     "block number when it was created"                                   
     block: Int!           
 
-    lastPriceToken: String!
+    lastPriceToken: Token
     lastPriceValue: BigDecimal!
 }
 
@@ -76,9 +76,9 @@ type Nft @entity{
     tokenUri: String
   
     "address of the owner of the nft"                                     
-    owner: String!     
+    owner: User!      
     "address of the creator of the nft"                                     
-    creator: String!     
+    creator: User!      
 
     "same as id, it's just for easy discoverability"                                    
     address: String!     
@@ -113,7 +113,18 @@ type Nft @entity{
 
     "has metadata"
     hasMetadata: Boolean!                                            
+
+    nftData: [NftData!] @derivedFrom(field: "nft")
+    transferHistory: [NftTransferHistory!] @derivedFrom(field: "nft")
 }
+
+type NftData @entity{
+    "nft address+key"
+    id: ID!
+    nft: Nft!
+    key: Bytes
+    value: Bytes
+  }
 
 type OrderReuse @entity {
   id: ID!
@@ -124,6 +135,9 @@ type OrderReuse @entity {
   block: Int!
   providerFee: String
   providerFeeValidUntil: BigInt
+  "gas price in Wei"
+  gasPrice: BigInt
+  gasUsed: BigDecimal
   }
 
 type Order @entity {  
@@ -135,6 +149,7 @@ type Order @entity {
   payer: User!
   amount: BigDecimal!
   serviceIndex: Int!
+  nftOwner: User!
 
 
   # the fees will be updated from an event that will be created after (todo)
@@ -154,9 +169,12 @@ type Order @entity {
   tx: String!
   block: Int!
 
-  lastPriceToken: String!
+  lastPriceToken: Token
   lastPriceValue: BigDecimal!
   estimatedUSDValue: BigDecimal!
+  gasUsed: BigDecimal
+  "gas price in Wei"
+  gasPrice: BigInt
 }
 
 type User @entity {
@@ -382,12 +400,15 @@ type VeAllocateUser @entity{
   firstContact: Int!
   lastContact: Int!
   tx: String!
+  veOcean: VeOCEAN!
 }
 
 type VeAllocateId @entity{
   "id = {DataNFT Address}-{chain id}"
   id: ID!
-  
+  nftAddress: String!
+  chainId: BigInt!
+
   veAllocation: [VeAllocation!] @derivedFrom(field: "allocationId")
   allocatedTotal: BigDecimal!
 
@@ -449,25 +470,75 @@ type VeDelegation @entity {
 type VeOCEAN @entity {
   "id = {user address}"
   id: ID!
+  "total amount of locked tokens"
   lockedAmount: BigDecimal!
+  "unlock timestamp"
   unlockTime: BigInt!
   delegation: [VeDelegation!] @derivedFrom(field: "delegator")
   delegates: [VeDelegation!] @derivedFrom(field: "receiver")
+  deposits: [VeDeposit!] @derivedFrom(field: "veOcean")
+  claims: [VeClaim!] @derivedFrom(field: "veOcean")
+  allocation: VeAllocateUser @derivedFrom(field: "veOcean")
   block: Int!
 }
 
 type VeDeposit @entity {
   "id = {user address}-{timestamp}"
   id: ID!
+  "veOcean holder"
   provider:String!
+  "who initiated the tx"
+  sender: String!
+  "amount of tokens locked"
   value: BigDecimal!
+  "unlock timestamp"
   unlockTime: BigInt!
+  "deposit type: DEPOSIT_FOR = 0, CREATE_LOCK_TYPE = 1,INCREASE_LOCK_AMOUNT = 2,INCREASE_UNLOCK_TIME = 3, WITHDRAW = 4"
   type:BigInt!
+  timestamp: BigInt!
+  block: Int!
+  tx: String!
+  veOcean: VeOCEAN!
+}
+
+
+type VeFeeDistributor @entity {
+  "id = contract address"
+  id: ID!
+  "token used by FeeDistributor"
+  token: Token!
+  claims: [VeClaim!] @derivedFrom(field: "VeFeeDistributor")
+  checkpoints: [VeFeeDistributorCheckPoint!] @derivedFrom(field: "VeFeeDistributor")
+}
+
+type VeFeeDistributorCheckPoint @entity {
+  "id = {tx}-{eventno}"
+  id: ID!
+  "amount of tokens for rewards"
+  tokens: BigDecimal!
+  "who initiated the tx"
+  sender: String!
+  VeFeeDistributor: VeFeeDistributor!
   timestamp: BigInt!
   block: Int!
   tx: String!
 }
 
+type VeClaim @entity {
+  "id = {tx}-{eventno}"
+  id: ID!
+  "amount of tokens claimed"
+  amount: BigDecimal!
+  "claim epoch"
+  claim_epoch: BigInt
+  "max_epoch"
+  max_epoch: BigInt
+  timestamp: BigInt!
+  block: Int!
+  tx: String!
+  veOcean: VeOCEAN!
+  VeFeeDistributor: VeFeeDistributor!
+}
 
 enum DFHistoryType {
   Allocated,
@@ -503,3 +574,15 @@ type DFReward @entity {
   availableClaims: [DFAvailableClaim!] @derivedFrom(field: "receiver")
   history: [DFHistory!] @derivedFrom(field: "receiver")
 }
+
+type NftTransferHistory @entity {
+  # ID = hash(nftAddress+txId+eventNumber)
+  id: ID!
+  nft: Nft!
+  oldOwner: User!
+  newOwner: User!
+  txId: String
+  timestamp: Int!
+  block: Int!
+}
+
