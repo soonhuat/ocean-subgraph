@@ -23,6 +23,8 @@ export function getOceanAddress(): string {
     return '0x99c409e5f62e4bd2ac142f17cafb6810b8f0baae'
   if (network == 'polygonedge' || network == 'edgenet')
     return '0x61c9e793f3d5247cc12db82b9db733fc9ffba812'
+  if (network == 'hederatestnet')
+    return '0x0000000000000000000000000000000002eC5e88'
   return '0x967da4048cd07ab37855c090aaf366e4ce1b9f48'
 }
 
@@ -47,6 +49,8 @@ export function getOpfCollectorAddress(): string {
     return '0x99c409e5f62e4bd2ac142f17cafb6810b8f0baae'
   if (network == 'polygonedge' || network == 'edgenet')
     return '0x61c9e793f3d5247cc12db82b9db733fc9ffba812'
+  if (network == 'hederatestnet')
+    return '0x0000000000000000000000000000000002eC5e88'
   return '0x967da4048cd07ab37855c090aaf366e4ce1b9f48'
 }
 
