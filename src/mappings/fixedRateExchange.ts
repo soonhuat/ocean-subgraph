@@ -191,6 +191,20 @@ export function handleSwap(event: Swapped): void {
     BigInt.fromI32(18).toI32()
   )
 
+  // Track fees
+  swap.oceanFeeAmount = weiToDecimal(
+    event.params.oceanFeeAmount.toBigDecimal(),
+    BigInt.fromI32(baseToken.decimals).toI32()
+  )
+  swap.marketFeeAmount = weiToDecimal(
+    event.params.marketFeeAmount.toBigDecimal(),
+    BigInt.fromI32(baseToken.decimals).toI32()
+  )
+  swap.consumeMarketFeeAmount = weiToDecimal(
+    event.params.consumeMarketFeeAmount.toBigDecimal(),
+    BigInt.fromI32(baseToken.decimals).toI32()
+  )
+
   swap.save()
 
   updateFixedRateExchangeSupply(event.params.exchangeId, event.address)
@@ -206,7 +220,11 @@ export function handleSwap(event: Swapped): void {
     Address.fromString(fixedRateExchange.datatoken),
     true
   )
-  datatoken.lastPriceToken = fixedRateExchange.baseToken
+  const priceToken = getToken(
+    Address.fromString(fixedRateExchange.baseToken),
+    false
+  )
+  datatoken.lastPriceToken = priceToken.id
   datatoken.lastPriceValue = fixedRateExchange.price
   datatoken.save()
 }

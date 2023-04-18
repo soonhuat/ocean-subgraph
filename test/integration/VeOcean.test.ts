@@ -6,14 +6,17 @@ import {
   sendTx,
   approve,
   ConfigHelper,
-  sleep
+  sleep,
+  VeFeeDistributor
 } from '@oceanprotocol/lib'
 import { AbiItem } from 'web3-utils'
+import { HttpProvider } from 'web3-providers-http'
 import { assert } from 'chai'
 import Web3 from 'web3'
 import { homedir } from 'os'
 import fs from 'fs'
 import { fetch } from 'cross-fetch'
+import veDelegation from '@oceanprotocol/contracts/artifacts/contracts/ve/veDelegation.vy/veDelegation.json'
 
 const data = JSON.parse(
   fs.readFileSync(
@@ -29,10 +32,82 @@ const web3 = new Web3('http://127.0.0.1:8545')
 const subgraphUrl =
   'http://127.0.0.1:9000/subgraphs/name/oceanprotocol/ocean-subgraph'
 
+function evmMine() {
+  const provider = web3.currentProvider as HttpProvider
+  return new Promise((resolve, reject) => {
+    provider.send(
+      {
+        jsonrpc: '2.0',
+        method: 'evm_mine',
+        id: new Date().getTime()
+      },
+      (error, result) => {
+        if (error) {
+          return reject(error)
+        }
+        return resolve(result)
+      }
+    )
+  })
+}
+function evmIncreaseTime(seconds) {
+  const provider = web3.currentProvider as HttpProvider
+  return new Promise((resolve, reject) => {
+    provider.send(
+      {
+        method: 'evm_increaseTime',
+        params: [seconds],
+        jsonrpc: '2.0',
+        id: new Date().getTime()
+      },
+      (error, result) => {
+        if (error) {
+          return reject(error)
+        }
+        return evmMine().then(() => resolve(result))
+      }
+    )
+  })
+}
+
+async function getTotalLockedOcean() {
+  const initialQuery = {
+    query: `query{
+      globalStatistics{
+        totalOceanLocked
+      }
+    }`
+  }
+  const initialResponse = await fetch(subgraphUrl, {
+    method: 'POST',
+    body: JSON.stringify(initialQuery)
+  })
+  const data = (await initialResponse.json()).data.globalStatistics
+  if (data.length == 0) return 0
+
+  return data[0].totalOceanLocked
+}
+const minAbi = [
+  {
+    constant: false,
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' }
+    ],
+    name: 'mint',
+    outputs: [{ name: '', type: 'bool' }],
+    payable: false,
+    stateMutability: 'nonpayable',
+    type: 'function'
+  }
+] as AbiItem[]
+
 describe('veOcean tests', async () => {
   let nftFactory
   let veOcean: VeOcean
+  let delegateContract
   let veAllocate: VeAllocate
+  let veFeeDistributor: VeFeeDistributor
   let ownerAccount: string
   let Alice: string
   let Bob: string
@@ -47,26 +122,17 @@ describe('veOcean tests', async () => {
     ownerAccount = accounts[0]
     Alice = accounts[1]
     Bob = accounts[2]
-    const minAbi = [
-      {
-        constant: false,
-        inputs: [
-          { name: 'to', type: 'address' },
-          { name: 'value', type: 'uint256' }
-        ],
-        name: 'mint',
-        outputs: [{ name: '', type: 'bool' }],
-        payable: false,
-        stateMutability: 'nonpayable',
-        type: 'function'
-      }
-    ] as AbiItem[]
+    delegateContract = new web3.eth.Contract(
+      veDelegation.abi as AbiItem[],
+      addresses.veDelegation
+    )
+
     const tokenContract = new web3.eth.Contract(minAbi, addresses.Ocean)
     const estGas = await calculateEstimatedGas(
       ownerAccount,
       tokenContract.methods.mint,
       Alice,
-      web3.utils.toWei('1000')
+      web3.utils.toWei('100000')
     )
     await sendTx(
       ownerAccount,
@@ -75,7 +141,7 @@ describe('veOcean tests', async () => {
       1,
       tokenContract.methods.mint,
       Alice,
-      web3.utils.toWei('1000')
+      web3.utils.toWei('100000')
     )
     await sendTx(
       ownerAccount,
@@ -84,16 +150,18 @@ describe('veOcean tests', async () => {
       1,
       tokenContract.methods.mint,
       Bob,
-      web3.utils.toWei('1000')
+      web3.utils.toWei('100000')
     )
     veOcean = new VeOcean(addresses.veOCEAN, web3)
     veAllocate = new VeAllocate(addresses.veAllocate, web3)
     nftFactory = new NftFactory(addresses.ERC721Factory, web3)
+    veFeeDistributor = new VeFeeDistributor(addresses.veFeeDistributor, web3)
   })
 
   it('Alice should lock 100 Ocean', async () => {
     // since we can only lock once, we test if tx fails or not
     // so if there is already a lock, skip it
+    const totalOceanLockedBefore = await getTotalLockedOcean()
     let currentBalance = await veOcean.getLockedAmount(Alice)
     let currentLock = await veOcean.lockEnd(Alice)
     const amount = '100'
@@ -122,6 +190,19 @@ describe('veOcean tests', async () => {
     currentBalance = await veOcean.getLockedAmount(Alice)
     currentLock = await veOcean.lockEnd(Alice)
     await sleep(2000)
+    const totalOceanLockedAfter = await getTotalLockedOcean()
+    assert(
+      parseFloat(totalOceanLockedAfter) > parseFloat(totalOceanLockedBefore),
+      'After (' +
+        totalOceanLockedAfter +
+        ') shold be higher then ' +
+        totalOceanLockedBefore
+    )
+    assert(
+      parseFloat(totalOceanLockedAfter) ==
+        parseFloat(totalOceanLockedBefore + amount),
+      'Invalid totalOceanLockedAfter (' + totalOceanLockedAfter + ')'
+    )
     const initialQuery = {
       query: `query {
                   veOCEANs(id:"${Alice.toLowerCase()}"){    
@@ -358,5 +439,277 @@ describe('veOcean tests', async () => {
       'Expected totalAllocation 1000 to equal subgraph value ' +
         info[0].allocatedTotal
     )
+  })
+
+  it('Alice should advance chain one day', async () => {
+    await evmIncreaseTime(60 * 60 * 24)
+  })
+
+  it('Alice should add ocean rewards to feeDistrib', async () => {
+    // mint 10 ocean and send them to feeDistrib
+    let tokenContract = new web3.eth.Contract(minAbi, addresses.Ocean)
+    let estGas = await calculateEstimatedGas(
+      ownerAccount,
+      tokenContract.methods.mint,
+      addresses.veFeeDistributor,
+      web3.utils.toWei('10')
+    )
+    await sendTx(
+      ownerAccount,
+      estGas,
+      web3,
+      1,
+      tokenContract.methods.mint,
+      addresses.veFeeDistributor,
+      web3.utils.toWei('10')
+    )
+    const minAbiFee = [
+      {
+        name: 'checkpoint_token',
+        outputs: [],
+        inputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+        gas: 820723
+      },
+      {
+        name: 'checkpoint_total_supply',
+        outputs: [],
+        inputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+        gas: 10592405
+      }
+    ] as AbiItem[]
+    tokenContract = new web3.eth.Contract(minAbiFee, addresses.veFeeDistributor)
+    estGas = await calculateEstimatedGas(
+      ownerAccount,
+      tokenContract.methods.checkpoint_token
+    )
+
+    await sendTx(
+      ownerAccount,
+      estGas,
+      web3,
+      1,
+      tokenContract.methods.checkpoint_token
+    )
+    estGas = await calculateEstimatedGas(
+      ownerAccount,
+      tokenContract.methods.checkpoint_total_supply
+    )
+    await sendTx(
+      ownerAccount,
+      estGas,
+      web3,
+      1,
+      tokenContract.methods.checkpoint_total_supply
+    )
+  })
+
+  it('Alice should advance chain 7 day', async () => {
+    await evmIncreaseTime(60 * 60 * 24 * 7)
+  })
+
+  it('Alice should add again ocean rewards to feeDistrib', async () => {
+    // mint 20 ocean and send them to feeDistrib
+    let tokenContract = new web3.eth.Contract(minAbi, addresses.Ocean)
+    let estGas = await calculateEstimatedGas(
+      ownerAccount,
+      tokenContract.methods.mint,
+      addresses.veFeeDistributor,
+      web3.utils.toWei('20')
+    )
+    await sendTx(
+      ownerAccount,
+      estGas,
+      web3,
+      1,
+      tokenContract.methods.mint,
+      addresses.veFeeDistributor,
+      web3.utils.toWei('20')
+    )
+    const minAbiFee = [
+      {
+        name: 'checkpoint_token',
+        outputs: [],
+        inputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+        gas: 820723
+      },
+      {
+        name: 'checkpoint_total_supply',
+        outputs: [],
+        inputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+        gas: 10592405
+      }
+    ] as AbiItem[]
+    tokenContract = new web3.eth.Contract(minAbiFee, addresses.veFeeDistributor)
+    estGas = await calculateEstimatedGas(
+      ownerAccount,
+      tokenContract.methods.checkpoint_token
+    )
+    await sendTx(
+      ownerAccount,
+      estGas,
+      web3,
+      1,
+      tokenContract.methods.checkpoint_token
+    )
+    estGas = await calculateEstimatedGas(
+      ownerAccount,
+      tokenContract.methods.checkpoint_total_supply
+    )
+    await sendTx(
+      ownerAccount,
+      estGas,
+      web3,
+      1,
+      tokenContract.methods.checkpoint_total_supply
+    )
+  })
+
+  it('Alice should advance chain 7 day', async () => {
+    await evmIncreaseTime(60 * 60 * 24 * 7)
+  })
+
+  it('Alice should claim rewards', async () => {
+    await veFeeDistributor.claim(Alice)
+  })
+  it('Alice should withdraw locked tokens', async () => {
+    await evmIncreaseTime(60 * 60 * 24 * 7)
+    const totalOceanLockedBefore = await getTotalLockedOcean()
+    await veOcean.withdraw(Alice)
+    await sleep(2000)
+    const totalOceanLockedAfter = await getTotalLockedOcean()
+    assert(
+      parseFloat(totalOceanLockedAfter) < parseFloat(totalOceanLockedBefore),
+      'After (' +
+        totalOceanLockedAfter +
+        ') shold be lower then ' +
+        totalOceanLockedBefore
+    )
+  })
+
+  it('Alice should lock 100 Ocean and Delegate them to Bob', async () => {
+    // since we can only lock once, we test if tx fails or not
+    // so if there is already a lock, skip it
+    let currentBalance = await veOcean.getLockedAmount(Alice)
+    let currentLock = await veOcean.lockEnd(Alice)
+    const amount = '100'
+    await approve(
+      web3,
+      config,
+      Alice,
+      addresses.Ocean,
+      addresses.veOCEAN,
+      amount
+    )
+    const timestamp = Math.floor(Date.now() / 1000)
+    const unlockTime = timestamp + 30 * 86400
+    console.log('unlock time', unlockTime)
+
+    if (parseInt(currentBalance) > 0 || currentLock > 0) {
+      // we already have some locked tokens, so our transaction should fail
+      try {
+        await veOcean.lockTokens(Alice, amount, unlockTime)
+        assert(false, 'This should fail!')
+      } catch (e) {
+        // do nothing
+      }
+    } else {
+      await veOcean.lockTokens(Alice, amount, unlockTime)
+    }
+    currentBalance = await veOcean.getLockedAmount(Alice)
+    currentLock = await veOcean.lockEnd(Alice)
+    await sleep(2000)
+    const initialQuery = {
+      query: `query {
+                      veOCEANs(id:"${Alice.toLowerCase()}"){    
+                        id,
+                        lockedAmount,
+                        unlockTime
+                      }
+                    }`
+    }
+    await sleep(2000)
+
+    const initialResponse = await fetch(subgraphUrl, {
+      method: 'POST',
+      body: JSON.stringify(initialQuery)
+    })
+    await sleep(2000)
+    const info = (await initialResponse.json()).data.veOCEANs
+    assert(info[0].id === Alice.toLowerCase(), 'ID is incorrect')
+    assert(info[0].lockedAmount === currentBalance, 'LockedAmount is incorrect')
+    assert(info[0].unlockTime === currentLock, 'Unlock time is not correct')
+
+    const lockTime = await veOcean.lockEnd(Alice)
+    const extLockTime = Number(lockTime) + 31556926
+
+    await delegateContract.methods.setApprovalForAll(Alice, true).send({
+      from: Alice
+    })
+
+    await veOcean.increaseUnlockTime(Alice, extLockTime)
+
+    const estGas = await calculateEstimatedGas(
+      Alice,
+      delegateContract.methods.create_boost,
+      Alice,
+      Bob,
+      10000,
+      0,
+      extLockTime,
+      0
+    )
+
+    const tx3 = await sendTx(
+      Alice,
+      estGas,
+      web3,
+      1,
+      delegateContract.methods.create_boost,
+      Alice,
+      Bob,
+      10000,
+      0,
+      extLockTime,
+      0
+    )
+
+    assert(tx3, 'Transaction failed')
+    assert(tx3.events.DelegateBoost, 'No Delegate boost event')
+
+    sleep(4000)
+    const delegateQuery = {
+      query: `query {
+        veDelegations{  
+          id,
+          delegator {
+            id
+          },
+          receiver {
+            id
+          },
+          tokenId,
+          amount,
+          cancelTime,
+          expireTime
+        }
+        }`
+    }
+
+    const delegateResponse = await fetch(subgraphUrl, {
+      method: 'POST',
+      body: JSON.stringify(delegateQuery)
+    })
+    const json = await delegateResponse.json()
+    console.log('json', json)
+    console.log('json?.data?.veDelegations', json?.data?.veDelegations)
+    assert(json?.data?.veDelegations, 'No veDelegations')
   })
 })

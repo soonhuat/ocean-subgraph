@@ -1,6 +1,11 @@
+import { BigDecimal, BigInt } from '@graphprotocol/graph-ts'
 import { Deposit, Supply, Withdraw } from '../@types/veOCEAN/veOCEAN'
 import { weiToDecimal } from './utils/generic'
 import { getDeposit, getveOCEAN } from './utils/veUtils'
+import {
+  getTotalOceanLocked,
+  updateTotalOceanLocked
+} from './utils/globalUtils'
 
 export function handleDeposit(event: Deposit): void {
   const provider = event.params.provider
@@ -8,9 +13,16 @@ export function handleDeposit(event: Deposit): void {
   const locktime = event.params.locktime
   const type = event.params.type
   const ts = event.params.ts
-
+  const totalOceanLocked = getTotalOceanLocked()
+  const veOCEAN = getveOCEAN(provider.toHex())
   // Create new Deposit entity
-  const deposit = getDeposit(provider.toHex() + '-' + locktime.toString())
+  const deposit = getDeposit(
+    provider.toHex() +
+      '-' +
+      event.transaction.hash.toHex() +
+      '-' +
+      event.logIndex.toString()
+  )
   deposit.provider = provider.toHex()
   deposit.value = weiToDecimal(value.toBigDecimal(), 18)
   deposit.unlockTime = locktime
@@ -18,10 +30,15 @@ export function handleDeposit(event: Deposit): void {
   deposit.timestamp = ts
   deposit.block = event.block.number.toI32()
   deposit.tx = event.transaction.hash.toHex()
+  deposit.sender = event.transaction.from.toHex()
+  deposit.veOcean = veOCEAN.id
+
+  deposit.totalOceanLocked = totalOceanLocked.plus(deposit.value)
+  updateTotalOceanLocked(deposit.totalOceanLocked)
+
   deposit.save()
   // --------------------------------------------
 
-  const veOCEAN = getveOCEAN(provider.toHex())
   const lockedAmount = weiToDecimal(value.toBigDecimal(), 18)
   veOCEAN.unlockTime = locktime
   veOCEAN.lockedAmount = veOCEAN.lockedAmount.plus(lockedAmount)
@@ -29,4 +46,37 @@ export function handleDeposit(event: Deposit): void {
   veOCEAN.save()
 }
 export function handleSupply(event: Supply): void {}
-export function handleWithdraw(event: Withdraw): void {}
+export function handleWithdraw(event: Withdraw): void {
+  const totalOceanLocked = getTotalOceanLocked()
+  const provider = event.params.provider
+  const value = event.params.value
+  const ts = event.params.ts
+
+  const veOCEAN = getveOCEAN(provider.toHex())
+  // Create new Deposit entity
+  const deposit = getDeposit(
+    provider.toHex() +
+      '-' +
+      event.transaction.hash.toHex() +
+      '-' +
+      event.logIndex.toString()
+  )
+  deposit.provider = provider.toHex()
+  deposit.value = weiToDecimal(value.toBigDecimal(), 18).neg()
+  deposit.unlockTime = BigInt.zero()
+  deposit.type = BigInt.fromI32(4)
+  deposit.timestamp = ts
+  deposit.block = event.block.number.toI32()
+  deposit.tx = event.transaction.hash.toHex()
+  deposit.sender = event.transaction.from.toHex()
+  deposit.veOcean = veOCEAN.id
+  deposit.totalOceanLocked = totalOceanLocked.plus(deposit.value) // it's already negated above
+  updateTotalOceanLocked(deposit.totalOceanLocked)
+  deposit.save()
+  // --------------------------------------------
+
+  veOCEAN.lockedAmount = BigDecimal.zero()
+  veOCEAN.unlockTime = BigInt.zero()
+  veOCEAN.block = event.block.number.toI32()
+  veOCEAN.save()
+}

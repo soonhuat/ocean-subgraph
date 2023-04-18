@@ -130,8 +130,8 @@ describe('NFT tests', async () => {
                 symbol,
                 name,
                 tokenUri,
-                owner,
-                creator,
+                owner{id},
+                creator{id},
                 address,
                 providerUrl,
                 assetState,
@@ -157,8 +157,8 @@ describe('NFT tests', async () => {
     assert(nft.symbol === nftSymbol, 'incorrect value for: symbol')
     assert(nft.name === nftName, 'incorrect value for: name')
     assert(nft.tokenUri === tokenURI, 'incorrect value for: tokenUri')
-    assert(nft.owner === publisher, 'incorrect value for: owner')
-    assert(nft.creator === publisher, 'incorrect value for: creator')
+    assert(nft.owner.id === publisher, 'incorrect value for: owner')
+    assert(nft.creator.id === publisher, 'incorrect value for: creator')
     assert(nft.managerRole[0] === publisher, 'incorrect value for: managerRole')
     assert(
       nft.erc20DeployerRole[0] === factoryAddress,
@@ -185,18 +185,22 @@ describe('NFT tests', async () => {
   })
 
   it('Update metadata', async () => {
+    const chain = await web3.eth.getChainId()
     // create the files encrypted string
-    let providerResponse = await ProviderInstance.encrypt(assetUrl, providerUrl)
+    let providerResponse = await ProviderInstance.encrypt(
+      assetUrl,
+      chain,
+      providerUrl
+    )
     ddo.services[0].files = await providerResponse
     ddo.services[0].datatokenAddress = datatokenAddress
     // update ddo and set the right did
     ddo.nftAddress = erc721Address
-    const chain = await web3.eth.getChainId()
     ddo.id =
       'did:op:' +
       SHA256(web3.utils.toChecksumAddress(erc721Address) + chain.toString(10))
 
-    providerResponse = await ProviderInstance.encrypt(ddo, providerUrl)
+    providerResponse = await ProviderInstance.encrypt(ddo, chain, providerUrl)
     const encryptedResponse = await providerResponse
     const metadataHash = getHash(JSON.stringify(ddo))
     await nft.setMetadata(
@@ -219,8 +223,8 @@ describe('NFT tests', async () => {
                 symbol,
                 name,
                 tokenUri,
-                owner,
-                creator,
+                owner{id},
+                creator{id},
                 address,
                 providerUrl,
                 assetState,
@@ -247,8 +251,8 @@ describe('NFT tests', async () => {
     assert(updatedNft.symbol === nftSymbol, 'incorrect value for: symbol')
     assert(updatedNft.name === nftName, 'incorrect value for: name')
     assert(updatedNft.tokenUri === tokenURI, 'incorrect value for: tokenUri')
-    assert(updatedNft.owner === publisher, 'incorrect value for: owner')
-    assert(updatedNft.creator === publisher, 'incorrect value for: creator')
+    assert(updatedNft.owner.id === publisher, 'incorrect value for: owner')
+    assert(updatedNft.creator.id === publisher, 'incorrect value for: creator')
     assert(
       updatedNft.managerRole[0] === publisher,
       'incorrect value for: managerRole'

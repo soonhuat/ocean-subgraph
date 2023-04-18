@@ -138,8 +138,8 @@ describe('Fixed Rate Exchange tests', async () => {
                 symbol,
                 name,
                 tokenUri,
-                owner,
-                creator,
+                owner{id},
+                creator{id},
                 address,
                 providerUrl,
                 assetState,
@@ -166,8 +166,8 @@ describe('Fixed Rate Exchange tests', async () => {
     assert(nft.symbol === nftSymbol, 'incorrect value for: symbol')
     assert(nft.name === nftName, 'incorrect value for: name')
     assert(nft.tokenUri === tokenURI, 'incorrect value for: tokenUri')
-    assert(nft.owner === publisher, 'incorrect value for: owner')
-    assert(nft.creator === publisher, 'incorrect value for: creator')
+    assert(nft.owner.id === publisher, 'incorrect value for: owner')
+    assert(nft.creator.id === publisher, 'incorrect value for: creator')
     assert(nft.managerRole[0] === publisher, 'incorrect value for: managerRole')
     assert(
       nft.erc20DeployerRole[0] === factoryAddress,
@@ -273,10 +273,6 @@ describe('Fixed Rate Exchange tests', async () => {
     assert(dtTx.blockNumber >= blockNumber, 'incorrect value for: tx')
     assert(dt.block >= blockNumber, 'incorrect value for: block')
     assert(dt.block < blockNumber + 50, 'incorrect value for: block')
-    assert(
-      dt.lastPriceToken === '0x0000000000000000000000000000000000000000',
-      'incorrect value for: lastPriceToken'
-    )
     assert(dt.lastPriceValue === '0', 'incorrect value for: lastPriceValue')
   })
 
@@ -588,6 +584,9 @@ describe('Fixed Rate Exchange tests', async () => {
           block
           createdTimestamp
           tx
+          oceanFeeAmount
+          marketFeeAmount
+          consumeMarketFeeAmount
           __typename
         }  
       }}`
@@ -630,6 +629,17 @@ describe('Fixed Rate Exchange tests', async () => {
     const tx = (
       await fixedRate.buyDatatokens(user1, exchangeId, dtAmount, '100')
     ).events?.Swapped
+
+    const oceanFeeAmount = web3.utils.fromWei(
+      new BN(tx.returnValues.oceanFeeAmount)
+    )
+    const marketFeeAmount = web3.utils.fromWei(
+      new BN(tx.returnValues.marketFeeAmount)
+    )
+    const consumeMarketFeeAmount = web3.utils.fromWei(
+      new BN(tx.returnValues.consumeMarketFeeAmount)
+    )
+
     await sleep(sleepMs)
     user1Balance = await datatoken.balance(datatokenAddress, user1)
     // user1 has 1 datatoken
@@ -652,6 +662,12 @@ describe('Fixed Rate Exchange tests', async () => {
     assert(swaps.block === tx.blockNumber, 'incorrect value for: block')
     assert(swaps.createdTimestamp >= time, 'incorrect: createdTimestamp')
     assert(swaps.createdTimestamp < time + 25, 'incorrect: createdTimestamp 2')
+    assert(swaps.oceanFeeAmount === oceanFeeAmount, 'incorrect: oceanFeeAmount')
+    assert(swaps.marketFeeAmount === marketFeeAmount, 'wrong marketFeeAmount')
+    assert(
+      swaps.consumeMarketFeeAmount === consumeMarketFeeAmount,
+      'wrong consumeMarketFeeAmount'
+    )
     assert(swaps.tx === tx.transactionHash, 'incorrect value for: tx')
     assert(swaps.__typename === 'FixedRateExchangeSwap', 'incorrect __typename')
   })
@@ -659,6 +675,9 @@ describe('Fixed Rate Exchange tests', async () => {
     await datatoken.approve(datatokenAddress, fixedRateAddress, dtAmount, user1)
     const tx = (await fixedRate.sellDatatokens(user1, exchangeId, '10', '9'))
       .events?.Swapped
+    const oceanFeeAmount = web3.utils.fromWei(
+      new BN(tx.returnValues.oceanFeeAmount)
+    )
     assert(tx != null)
     await sleep(sleepMs)
     const swapsQuery = {
@@ -672,6 +691,7 @@ describe('Fixed Rate Exchange tests', async () => {
           block
           createdTimestamp
           tx
+          oceanFeeAmount
           __typename
         }  
       }}`
@@ -693,6 +713,7 @@ describe('Fixed Rate Exchange tests', async () => {
     assert(swaps.block === tx.blockNumber, 'incorrect value for: block')
     assert(swaps.createdTimestamp >= time, 'incorrect: createdTimestamp')
     assert(swaps.createdTimestamp < time + 25, 'incorrect: createdTimestamp 2')
+    assert(swaps.oceanFeeAmount === oceanFeeAmount, 'incorrect: oceanFeeAmount')
     assert(swaps.tx === tx.transactionHash, 'incorrect value for: tx')
     assert(swaps.__typename === 'FixedRateExchangeSwap', 'incorrect __typename')
   })

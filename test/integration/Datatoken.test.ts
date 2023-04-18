@@ -162,7 +162,6 @@ describe('Datatoken tests', async () => {
           createdTimestamp,
           tx,
           block,
-          lastPriceToken,
           lastPriceValue
         }}`
     }
@@ -214,26 +213,26 @@ describe('Datatoken tests', async () => {
     assert(tx.blockNumber >= blockNumber, 'incorrect value for: tx')
     assert(dt.block >= blockNumber, 'incorrect value for: block')
     assert(dt.block < blockNumber + 50, 'incorrect value for: block')
-    assert(
-      dt.lastPriceToken === '0x0000000000000000000000000000000000000000',
-      'incorrect value for: lastPriceToken'
-    )
     assert(dt.lastPriceValue === '0', 'incorrect value for: lastPriceValue')
   })
 
   it('Correct Datatoken fields after updating metadata', async () => {
     // create the files encrypted string
-    let providerResponse = await ProviderInstance.encrypt(assetUrl, providerUrl)
+    const chain = await web3.eth.getChainId()
+    let providerResponse = await ProviderInstance.encrypt(
+      assetUrl,
+      chain,
+      providerUrl
+    )
     ddo.services[0].files = await providerResponse
     ddo.services[0].datatokenAddress = datatokenAddress
     // update ddo and set the right did
     ddo.nftAddress = erc721Address
-    const chain = await web3.eth.getChainId()
     ddo.id =
       'did:op:' +
       SHA256(web3.utils.toChecksumAddress(erc721Address) + chain.toString(10))
 
-    providerResponse = await ProviderInstance.encrypt(ddo, providerUrl)
+    providerResponse = await ProviderInstance.encrypt(ddo, chain, providerUrl)
     const encryptedResponse = await providerResponse
     const metadataHash = getHash(JSON.stringify(ddo))
     await nft.setMetadata(
@@ -275,7 +274,6 @@ describe('Datatoken tests', async () => {
           createdTimestamp,
           tx,
           block,
-          lastPriceToken,
           lastPriceValue
         }}`
     }
@@ -326,10 +324,6 @@ describe('Datatoken tests', async () => {
     assert(tx.blockNumber >= blockNumber, 'incorrect value for: tx')
     assert(dt.block >= blockNumber, 'incorrect value for: block')
     assert(dt.block < blockNumber + 50, 'incorrect value for: block')
-    assert(
-      dt.lastPriceToken === '0x0000000000000000000000000000000000000000',
-      'incorrect value for: lastPriceToken'
-    )
     assert(dt.lastPriceValue === '0', 'incorrect value for: lastPriceValue')
   })
 
@@ -368,7 +362,7 @@ describe('Datatoken tests', async () => {
     assert(Number(user2balance) === 0, 'Invalid user2 balance')
 
     const query = {
-      query: `query {token(id: "${newDtAddress.toLowerCase()}"){id,orderCount,orders {id}}}`
+      query: `query {token(id: "${newDtAddress.toLowerCase()}"){id,orderCount,orders {id, nftOwner{id}, lastPriceToken{id}}}}`
     }
 
     await sleep(2000)
@@ -428,5 +422,7 @@ describe('Datatoken tests', async () => {
     assert(token, 'Invalid token')
     assert(token.orderCount === '1', 'Invalid orderCount after order')
     assert(token.orders[0].id === orderId)
+    assert(token.orders[0].lastPriceToken.id === ZERO_ADDRESS)
+    assert(token.orders[0].nftOwner.id === publisher, 'invalid nftOwner')
   })
 })

@@ -122,18 +122,22 @@ describe('Simple Publish & consume test', async () => {
     const erc721Address = result.events.NFTCreated.returnValues[0]
     datatokenAddress = result.events.TokenCreated.returnValues[0]
 
+    const chain = await web3.eth.getChainId()
     // create the files encrypted string
-    let providerResponse = await ProviderInstance.encrypt(assetUrl, providerUrl)
+    let providerResponse = await ProviderInstance.encrypt(
+      assetUrl,
+      chain,
+      providerUrl
+    )
     ddo.services[0].files = await providerResponse
     ddo.services[0].datatokenAddress = datatokenAddress
     // update ddo and set the right did
     ddo.nftAddress = erc721Address
-    const chain = await web3.eth.getChainId()
     ddo.id =
       'did:op:' +
       SHA256(web3.utils.toChecksumAddress(erc721Address) + chain.toString(10))
 
-    providerResponse = await ProviderInstance.encrypt(ddo, providerUrl)
+    providerResponse = await ProviderInstance.encrypt(ddo, chain, providerUrl)
     const encryptedResponse = await providerResponse
     const metadataHash = getHash(JSON.stringify(ddo))
     await nft.setMetadata(
@@ -191,7 +195,7 @@ describe('Simple Publish & consume test', async () => {
 
     const queryOriginalOwner = {
       query: `query {
-          nft(id:"${graphNftToken}"){symbol,id,owner}}`
+          nft(id:"${graphNftToken}"){symbol,id,owner{id}}}`
     }
     const initialResponse = await fetch(subgraphUrl, {
       method: 'POST',
@@ -200,22 +204,25 @@ describe('Simple Publish & consume test', async () => {
     const initialResult = await initialResponse.json()
     // Checking original owner account has been set correctly
     assert(
-      initialResult.data.nft.owner.toLowerCase() ===
+      initialResult.data.nft.owner.id.toLowerCase() ===
         publisherAccount.toLowerCase()
     )
-
+    const chain = await web3.eth.getChainId()
     // create the files encrypted string
-    let providerResponse = await ProviderInstance.encrypt(assetUrl, providerUrl)
+    let providerResponse = await ProviderInstance.encrypt(
+      assetUrl,
+      chain,
+      providerUrl
+    )
     ddo.services[0].files = await providerResponse
     ddo.services[0].datatokenAddress = datatokenAddress
     // update ddo and set the right did
     ddo.nftAddress = erc721Address
-    const chain = await web3.eth.getChainId()
     ddo.id =
       'did:op:' +
       SHA256(web3.utils.toChecksumAddress(erc721Address) + chain.toString(10))
 
-    providerResponse = await ProviderInstance.encrypt(ddo, providerUrl)
+    providerResponse = await ProviderInstance.encrypt(ddo, chain, providerUrl)
     const encryptedResponse = await providerResponse
     const metadataHash = getHash(JSON.stringify(ddo))
     await nft.setMetadata(
@@ -235,14 +242,14 @@ describe('Simple Publish & consume test', async () => {
     await sleep(2000)
     const query2 = {
       query: `query {
-          nft(id:"${graphNftToken}"){symbol,id,owner, transferable}}`
+          nft(id:"${graphNftToken}"){symbol,id,owner{id}, transferable}}`
     }
     const response = await fetch(subgraphUrl, {
       method: 'POST',
       body: JSON.stringify(query2)
     })
     const queryResult = await response.json()
-    assert(queryResult.data.nft.owner === newOwnerAccount)
+    assert(queryResult.data.nft.owner.id === newOwnerAccount)
   })
 
   it('should save  provider fees after startOrder is called', async () => {
@@ -282,7 +289,9 @@ describe('Simple Publish & consume test', async () => {
     )
     const orderId = `${orderTx.transactionHash.toLowerCase()}-${datatokenAddress.toLowerCase()}-${user1.toLowerCase()}`
 
-    const query = { query: `query {order(id:"${orderId}"){id, providerFee}}` }
+    const query = {
+      query: `query {order(id:"${orderId}"){id, providerFee, lastPriceToken{id}}}`
+    }
 
     await sleep(2000)
     const response = await fetch(subgraphUrl, {
@@ -293,6 +302,9 @@ describe('Simple Publish & consume test', async () => {
     const queryResult = await response.json()
 
     const providerFeeJSON = JSON.parse(queryResult.data.order.providerFee)
+    const lastPriceToken = queryResult.data.order.lastPriceToken.id
+
+    assert(lastPriceToken === ZERO_ADDRESS, 'Wrong lastPriceToken')
 
     assert(
       providerFeeJSON.providerFeeAddress.toLowerCase() ===
@@ -352,7 +364,7 @@ describe('Simple Publish & consume test', async () => {
     const orderId = `${orderTx.transactionHash.toLowerCase()}-${datatokenAddress.toLowerCase()}-${user4.toLowerCase()}`
 
     const initialQuery = {
-      query: `query {order(id:"${orderId}"){id, providerFee}}`
+      query: `query {order(id:"${orderId}"){id, providerFee, lastPriceToken{id}}}`
     }
     await sleep(2000)
     const initialResponse = await fetch(subgraphUrl, {
@@ -363,7 +375,9 @@ describe('Simple Publish & consume test', async () => {
     const initialProviderFeeJSON = JSON.parse(
       initialQueryResult.data.order.providerFee
     )
+    const lastPriceToken = initialQueryResult.data.order.lastPriceToken.id
 
+    assert(lastPriceToken === ZERO_ADDRESS, 'Wrong initial lastPriceToken set')
     assert(
       initialProviderFeeJSON.providerFeeAddress.toLowerCase() ===
         setInitialProviderFee.providerFeeAddress.toLowerCase(),
