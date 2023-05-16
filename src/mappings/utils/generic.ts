@@ -47,6 +47,8 @@ export function getOpfCollectorAddress(): string {
     return '0x99c409e5f62e4bd2ac142f17cafb6810b8f0baae'
   if (network == 'polygonedge' || network == 'edgenet')
     return '0x61c9e793f3d5247cc12db82b9db733fc9ffba812'
+  if (network == 'gen-x-testnet')
+    return '0x0995527d3473b3a98c471f1ed8787acd77fbf009'
   return '0x967da4048cd07ab37855c090aaf366e4ce1b9f48'
 }
 
