@@ -32,8 +32,8 @@ export function handleOrderStarted(event: OrderStarted): void {
     getOrderId(
       event.transaction.hash.toHex(),
       event.address.toHex(),
-      event.transaction.from.toHex(),
-      event.logIndex.toI32()
+      event.params.payer.toHex(),
+      0
     )
   )
 
@@ -114,7 +114,19 @@ export function handlerOrderReused(event: OrderReused): void {
     event.logIndex.toI32()
   )
 
-  if (!order) return
+  if (!order) {
+    log.info(
+      'handlerOrderReused searchOrderForEvent cannot find order with param, orderTxId: {}, address: {}, caller: {}, logIndex: {}, tx {}',
+      [
+        event.params.orderTxId.toHexString(),
+        event.address.toHex(),
+        event.params.caller.toHex(),
+        event.logIndex.toString(),
+        event.transaction.hash.toHexString()
+      ]
+    )
+    return
+  }
   const eventIndex: number = event.logIndex.toI32()
 
   const reuseOrder = new OrderReuse(
