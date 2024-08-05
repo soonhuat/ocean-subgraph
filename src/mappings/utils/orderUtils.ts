@@ -3,10 +3,11 @@ import { Order, OrderReuse } from '../../@types/schema'
 export function getOrderId(
   tx: string,
   tokenAddress: string,
-  fromAddress: string,
+  // fromAddress: string,
   eventIndex: number
 ): string {
-  return `${tx}-${tokenAddress}-${fromAddress}-${eventIndex}`
+  // return `${tx}-${tokenAddress}-${fromAddress}-${eventIndex}`
+  return `${tx}-${tokenAddress}-${eventIndex}`
 }
 
 export function createOrder(orderId: string): Order {
@@ -23,7 +24,7 @@ export function getOrder(
   const orderId = getOrderId(
     transactionHash,
     address,
-    transactionFrom,
+    // transactionFrom,
     eventIndex
   )
   let newOrder = Order.load(orderId)
@@ -40,7 +41,7 @@ export function searchOrderForEvent(
   eventIndex: number
 ): Order | null {
   for (let i = eventIndex; i >= 0; i--) {
-    const orderId = getOrderId(transactionHash, address, transactionFrom, i)
+    const orderId = getOrderId(transactionHash, address, i)
     const order = Order.load(orderId)
     if (order && order.datatoken == address) {
       return order

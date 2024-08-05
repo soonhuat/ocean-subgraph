@@ -29,12 +29,7 @@ import {
 
 export function handleOrderStarted(event: OrderStarted): void {
   const order = new Order(
-    getOrderId(
-      event.transaction.hash.toHex(),
-      event.address.toHex(),
-      event.params.payer.toHex(),
-      0
-    )
+    getOrderId(event.transaction.hash.toHex(), event.address.toHex(), 0)
   )
 
   const token = getToken(event.address, true)
